@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestionnaire DANSE · LUNÉA · AUTRES</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--text:#20222a;--muted:#747987;--border:#e7e8ee;--accent:#222}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:#17181d;color:white;padding:28px 18px 32px}header h1{margin:0;font-size:25px}header p{margin:7px 0 0;color:#bfc1c9}
+main{max-width:1100px;margin:-18px auto 40px;padding:0 15px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 4px 18px #00000008}
+.label{font-size:13px;color:var(--muted)}.value{font-size:26px;font-weight:750;margin-top:8px}.small{font-size:13px;color:var(--muted);margin-top:5px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer;background:#17181d;color:white}.btn.secondary{background:white;color:#222;border:1px solid var(--border)}
+.layout{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}.section-title{font-size:18px;font-weight:750;margin-bottom:14px}
+canvas{width:100%;height:270px}.table-wrap{overflow:auto}.table{width:100%;border-collapse:collapse;font-size:14px}.table th,.table td{padding:11px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}.in{color:#14834a;font-weight:700}.out{color:#c53d3d;font-weight:700}
+form{display:grid;gap:11px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}input,select{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:white;font-size:14px}
+.empty{text-align:center;padding:30px;color:var(--muted)}.bar{height:10px;background:#eceef3;border-radius:99px;overflow:hidden;margin-top:10px}.bar span{display:block;height:100%;background:#222;border-radius:99px}
+.branch{margin:13px 0}.branch-head{display:flex;justify-content:space-between;font-size:14px}
+footer{text-align:center;color:var(--muted);font-size:12px;margin:25px}
+@media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.layout{grid-template-columns:1fr}}@media(max-width:500px){.grid{grid-template-columns:1fr}header{padding-top:22px}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div style="max-width:1100px;margin:auto"><h1>Gestionnaire financier</h1><p>DANSE · LUNÉA · AUTRES — suivi automatique du compte regroupé</p></div></header>
+<main>
+<section class="grid" id="cards"></section>
+
+<div class="actions">
+<button class="btn" onclick="showForm()">＋ Ajouter une opération</button>
+<button class="btn secondary" onclick="resetAll()">Réinitialiser les données</button>
+</div>
+
+<div class="layout">
+<div class="card">
+<div class="section-title">Répartition actuelle</div>
+<canvas id="chart" width="600" height="300"></canvas>
+<div id="branches"></div>
+</div>
+
+<div class="card" id="formCard" style="display:none">
+<div class="section-title">Nouvelle opération</div>
+<form id="form">
+<div class="row">
+<div><label class="label">Type</label><select id="type"><option value="in">Entrée</option><option value="out">Sortie</option></select></div>
+<div><label class="label">Activité</label><select id="activity"><option>DANSE</option><option>LUNÉA</option><option>AUTRES</option></select></div>
+</div>
+<div class="row">
+<div><label class="label">Montant (€)</label><input id="amount" type="number" min="0.01" step="0.01" required></div>
+<div><label class="label">Date</label><input id="date" type="date" required></div>
+</div>
+<div><label class="label">Description</label><input id="description" placeholder="Ex. Vente, achat matériel..." required></div>
+<button class="btn" type="submit">Enregistrer</button>
+<button class="btn secondary" type="button" onclick="hideForm()">Annuler</button>
+</form>
+</div>
+</div>
+
+<div class="card" style="margin-top:14px">
+<div class="section-title">Historique des opérations</div>
+<div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Activité</th><th>Description</th><th>Type</th><th>Montant</th><th></th></tr></thead><tbody id="history"></tbody></table></div>
+</div>
+<footer>Les données sont enregistrées localement dans ce navigateur.</footer>
+</main>
+
+<script>
+const activities=["DANSE","LUNÉA","AUTRES"];
+let ops=JSON.parse(localStorage.getItem("gestion_ops")||"[]");
+const euro=n=>new Intl.NumberFormat("fr-BE",{style:"currency",currency:"EUR"}).format(n);
+function save(){localStorage.setItem("gestion_ops",JSON.stringify(ops));render()}
+function totals(){
+ const t={DANSE:0,LUNÉA:0,AUTRES:0},ins={DANSE:0,LUNÉA:0,AUTRES:0},outs={DANSE:0,LUNÉA:0,AUTRES:0};
+ ops.forEach(o=>{let n=Number(o.amount);if(o.type==="in"){t[o.activity]+=n;ins[o.activity]+=n}else{t[o.activity]-=n;outs[o.activity]+=n}});
+ return {t,ins,outs,total:Object.values(t).reduce((a,b)=>a+b,0),tin:Object.values(ins).reduce((a,b)=>a+b,0),tout:Object.values(outs).reduce((a,b)=>a+b,0)}
+}
+function render(){
+ const x=totals();
+ document.getElementById("cards").innerHTML=
+ `<div class="card"><div class="label">Solde global</div><div class="value">${euro(x.total)}</div><div class="small">${ops.length} opération(s)</div></div>
+ <div class="card"><div class="label">💃 DANSE</div><div class="value">${euro(x.t.DANSE)}</div><div class="small">${pct(x.t.DANSE,x.total)} du solde</div></div>
+ <div class="card"><div class="label">🕯️ LUNÉA</div><div class="value">${euro(x.t.LUNÉA)}</div><div class="small">${pct(x.t.LUNÉA,x.total)} du solde</div></div>
+ <div class="card"><div class="label">📦 AUTRES</div><div class="value">${euro(x.t.AUTRES)}</div><div class="small">${pct(x.t.AUTRES,x.total)} du solde</div></div>`;
+ document.getElementById("branches").innerHTML=activities.map(a=>`<div class="branch"><div class="branch-head"><b>${a}</b><span>${euro(x.t[a])} · ${pct(x.t[a],x.total)}</span></div><div class="bar"><span style="width:${Math.min(100,Math.max(0,Math.abs(x.t[a]/(x.total||1))*100))}%"></span></div></div>`).join("");
+ document.getElementById("history").innerHTML=ops.length?ops.slice().sort((a,b)=>b.date.localeCompare(a.date)).map((o,i)=>`<tr><td>${o.date}</td><td>${o.activity}</td><td>${esc(o.description)}</td><td class="${o.type}">${o.type==="in"?"Entrée":"Sortie"}</td><td class="${o.type}">${o.type==="in"?"+":"−"} ${euro(o.amount)}</td><td><button class="btn secondary" style="padding:6px 9px" onclick="del(${ops.indexOf(o)})">Suppr.</button></td></tr>`).join(""):`<tr><td colspan="6" class="empty">Aucune opération. Commence avec ta première rentrée ou dépense.</td></tr>`;
+ drawChart(x.t);
+}
+function pct(v,total){return total?Math.round(v/total*100)+"%":"0%"}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function del(i){if(confirm("Supprimer cette opération ?")){ops.splice(i,1);save()}}
+function showForm(){document.getElementById("formCard").style.display="block";document.getElementById("date").value=new Date().toISOString().slice(0,10);window.scrollTo({top:document.getElementById("formCard").offsetTop-20,behavior:"smooth"})}
+function hideForm(){document.getElementById("formCard").style.display="none"}
+document.getElementById("form").addEventListener("submit",e=>{e.preventDefault();ops.push({type:type.value,activity:activity.value,amount:Number(amount.value),date:date.value,description:description.value});e.target.reset();hideForm();save()});
+function resetAll(){if(confirm("Supprimer toutes les opérations ?")){ops=[];save()}}
+function drawChart(t){
+ const c=document.getElementById("chart"),ctx=c.getContext("2d"),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);
+ const vals=activities.map(a=>Math.max(0,t[a])),sum=vals.reduce((a,b)=>a+b,0);
+ if(!sum){ctx.fillStyle="#999";ctx.font="16px Arial";ctx.textAlign="center";ctx.fillText("Aucune donnée à afficher",w/2,h/2);return}
+ const cx=w/2,cy=h/2,r=90;let start=-Math.PI/2;
+ vals.forEach((v,i)=>{const ang=v/sum*Math.PI*2;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,start,start+ang);ctx.closePath();ctx.fillStyle=["#222","#777","#bbb"][i];ctx.fill();start+=ang});
+ ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(cx,cy,47,0,Math.PI*2);ctx.fill();
+}
+render();
+</script>
+</body>
+</html>
